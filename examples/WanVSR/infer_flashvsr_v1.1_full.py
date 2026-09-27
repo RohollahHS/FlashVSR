@@ -13,8 +13,13 @@ import argparse
 from diffsynth import ModelManager, FlashVSRFullPipeline
 from utils.utils import Causal_LQ4x_Proj
 
+HF_HUB = os.getenv("HF_HUB", ".")
+SCRATCH = os.getenv("SCRATCH", ".")
+
 ap = argparse.ArgumentParser()
-ap.add_argument("--model_path", default=os.path.join(os.getenv("HF_HUB", "."), "FlashVSR-v1.1"))
+ap.add_argument("--model_path", default=os.path.join(HF_HUB, "FlashVSR-v1.1"))
+ap.add_argument("--results_dir", default=os.path.join(SCRATCH, "results"))
+ap.add_argument("--inputs", nargs="+", default=["./inputs/example0.mp4", "./inputs/example1.mp4", "./inputs/example2.mp4", "./inputs/example3.mp4"])
 ap.add_argument("--tiled", action='store_true')
 args = ap.parse_args()
 
@@ -184,19 +189,12 @@ def init_pipeline():
     return pipe
 
 def main():
-    RESULT_ROOT = "./results"
-    os.makedirs(RESULT_ROOT, exist_ok=True)
-    inputs = [
-        "./inputs/example0.mp4",
-        "./inputs/example1.mp4",
-        "./inputs/example2.mp4",
-        "./inputs/example3.mp4",
-    ]
+    os.makedirs(args.results_dir, exist_ok=True)
     seed, scale, dtype, device = 0, 4, torch.bfloat16, 'cuda'
     sparse_ratio = 2.0      # Recommended: 1.5 or 2.0. 1.5 → faster; 2.0 → more stable.
     pipe = init_pipeline()
 
-    for p in inputs:
+    for p in args.inputs:
         torch.cuda.empty_cache(); torch.cuda.ipc_collect()
         name = os.path.basename(p.rstrip('/'))
         if name.startswith('.'):
@@ -218,7 +216,7 @@ def main():
             color_fix = True,
         )
         video = tensor2video(video)
-        save_video(video, os.path.join(RESULT_ROOT, f"FlashVSR_v1.1_Full_{name.split('.')[0]}_seed{seed}.mp4"), fps=fps, quality=6)
+        save_video(video, os.path.join(args.results_dir, f"FlashVSR_v1.1_Full_{name.split('.')[0]}_seed{seed}.mp4"), fps=fps, quality=6)
     print("Done.")
 
 if __name__ == "__main__":
