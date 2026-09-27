@@ -267,13 +267,15 @@ def main():
             color_fix = True,
         )
 
-        video = tensor2video(video)
         save_path = os.path.join(args.results_dir, f"FlashVSR_v1.1_Tiny_Long_{name.split('.')[0]}_seed{seed}.mp4" )
+
+        # video = tensor2video(video)
+        # save_video(video, save_path, fps=fps, quality=5)
+        
         del LQ
         import gc
         gc.collect()
 
-        # save_video(video, os.path.join(args.results_dir, f"FlashVSR_v1.1_Tiny_Long_{name.split('.')[0]}_seed{seed}.mp4"), fps=fps, quality=5)
         save_video_tensor(video, save_path, fps=fps, quality=5)
 
         del video
