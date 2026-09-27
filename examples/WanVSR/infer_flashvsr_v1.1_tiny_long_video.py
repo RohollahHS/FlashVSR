@@ -13,6 +13,8 @@ from diffsynth import ModelManager, FlashVSRTinyLongPipeline
 from utils.utils import Causal_LQ4x_Proj
 from utils.TCDecoder import build_tcdecoder
 
+import glob
+import subprocess
 import argparse
 
 HF_HUB = os.getenv("HF_HUB", ".")
@@ -24,6 +26,21 @@ ap.add_argument("--results_dir", default=os.path.join(SCRATCH, "results"))
 ap.add_argument("--inputs", nargs="+", default=["./inputs/example0.mp4", "./inputs/example1.mp4", "./inputs/example2.mp4", "./inputs/example3.mp4"])
 ap.add_argument("--tiled", action='store_true')
 args = ap.parse_args()
+
+def concat_mp4_chunks(chunk_dir, final_path):
+    chunks = sorted(glob.glob(os.path.join(chunk_dir, "chunk_*.mp4")))
+    if not chunks:
+        raise FileNotFoundError(f"No MP4 chunks found in: {chunk_dir}")
+    concat_file = os.path.join(chunk_dir, "concat.txt")
+    with open(concat_file, "w") as f:
+        for chunk in chunks:
+            f.write(f"file '{os.path.abspath(chunk)}'\n")
+    subprocess.run( [ "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", concat_file, "-c", "copy", final_path, ], check=True, )
+    os.remove(concat_file)
+    for cunk in chunks:
+        os.remove(cunk)
+    print(f"Done: {final_path}")
+    print(f"Deleted {len(chunks)} temporary chunks.")
 
 def tensor2video(frames):
     frames = rearrange(frames, "C T H W -> T H W C")
@@ -265,18 +282,28 @@ def main():
             kv_ratio=3.0,
             local_range=11,  # Recommended: 9 or 11. local_range=9 → sharper details; 11 → more stable results.
             color_fix = True,
+            output_dir=os.path.join(args.results_dir, "chunks"),
         )
 
-        save_path = os.path.join(args.results_dir, f"FlashVSR_v1.1_Tiny_Long_{name.split('.')[0]}_seed{seed}.mp4" )
-
-        # video = tensor2video(video)
-        # save_video(video, save_path, fps=fps, quality=5)
-        
         del LQ
         import gc
         gc.collect()
 
-        save_video_tensor(video, save_path, fps=fps, quality=5)
+        save_path = os.path.join(args.results_dir, f"FlashVSR_v1.1_Tiny_Long_{name.split('.')[0]}_seed{seed}.mp4" )
+
+        print("FlashVSR inference finished.")
+        print("Starting RAM-safe concatenation...")
+
+
+        # video = tensor2video(video)
+        # save_video(video, save_path, fps=fps, quality=5)
+        if video is not None:
+            save_video_tensor(video, save_path, fps=fps, quality=5)
+        else:
+            concat_mp4_chunks(
+                chunk_dir=os.path.join(args.results_dir, "chunks"),
+                final_path=save_path,
+            )
 
         del video
         gc.collect()
