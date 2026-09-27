@@ -15,6 +15,7 @@ from utils.utils import Causal_LQ4x_Proj
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--model_path", default=os.path.join(os.getenv("HF_HUB", "."), "FlashVSR-v1.1"))
+ap.add_argument("--tiled", action='store_true')
 args = ap.parse_args()
 
 def tensor2video(frames: torch.Tensor):
@@ -208,7 +209,7 @@ def main():
 
         video = pipe(
             prompt="", negative_prompt="", cfg_scale=1.0, num_inference_steps=1, seed=seed, 
-            tiled=False,# Disable tiling: faster inference but higher VRAM usage. 
+            tiled=args.tiled,# Disable tiling: faster inference but higher VRAM usage. 
                         # Set to True for lower memory consumption at the cost of speed.
             LQ_video=LQ, num_frames=F, height=th, width=tw, is_full_block=False, if_buffer=True,
             topk_ratio=sparse_ratio*768*1280/(th*tw), 
