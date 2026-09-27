@@ -58,6 +58,39 @@ def save_video(frames, save_path, fps=30, quality=5):
         w.append_data(np.array(f))
     w.close()
 
+def save_video_tensor(frames, save_path, fps=30, quality=5):
+    """
+    Write the output tensor one frame at a time.
+    Avoids creating a huge float32/NumPy/PIL copy of the entire video.
+    frames: [C, T, H, W], normally CPU bfloat16
+    """
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+
+    frames = frames.permute(1, 2, 3, 0).contiguous()  # [T,H,W,C]
+
+    w = imageio.get_writer(
+        save_path,
+        fps=fps,
+        quality=quality,
+    )
+
+    try:
+        for i in tqdm(
+            range(frames.shape[0]),
+            desc=f"Saving {os.path.basename(save_path)}"
+        ):
+            frame = frames[i]
+
+            frame = (
+                (frame.float() + 1.0) * 127.5
+            ).clamp(0, 255).to(torch.uint8)
+
+            frame = frame.numpy()
+
+            w.append_data(frame)
+    finally:
+        w.close()
+    
 def compute_scaled_and_target_dims(w0: int, h0: int, scale: float = 4.0, multiple: int = 128):
     if w0 <= 0 or h0 <= 0:
         raise ValueError("Invalid original size")
@@ -235,7 +268,17 @@ def main():
         )
 
         video = tensor2video(video)
-        save_video(video, os.path.join(args.results_dir, f"FlashVSR_v1.1_Tiny_Long_{name.split('.')[0]}_seed{seed}.mp4"), fps=fps, quality=5)
+        save_path = os.path.join(args.results_dir, f"FlashVSR_v1.1_Tiny_Long_{name.split('.')[0]}_seed{seed}.mp4" )
+        del LQ
+        import gc
+        gc.collect()
+
+        # save_video(video, os.path.join(args.results_dir, f"FlashVSR_v1.1_Tiny_Long_{name.split('.')[0]}_seed{seed}.mp4"), fps=fps, quality=5)
+        save_video_tensor(video, save_path, fps=fps, quality=5)
+
+        del video
+        gc.collect()
+
 
     print("Done.")
 
