@@ -207,7 +207,6 @@ def init_pipeline():
 
 def main():
     os.makedirs(args.results_dir, exist_ok=True)
-    os.makedirs(args.results_dir, exist_ok=True)
     seed, scale, dtype, device = 0, 4.0, torch.bfloat16, 'cuda'
     sparse_ratio = 2.0      # Recommended: 1.5 or 2.0. 1.5 → faster; 2.0 → more stable.
     pipe = init_pipeline()
