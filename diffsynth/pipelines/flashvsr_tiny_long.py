@@ -18,6 +18,28 @@ from ..models.wan_video_vae import WanVideoVAE, RMS_norm, CausalConv3d, Upsample
 from ..schedulers.flow_match import FlowMatchScheduler
 from .base import BasePipeline
 
+import imageio.v2 as imageio
+
+import time
+import psutil
+
+def bytes_to_gb(b):
+    return b / (1024 ** 3)
+
+def print_ram():
+    vm = psutil.virtual_memory()
+    total = bytes_to_gb(vm.total)
+    used = bytes_to_gb(vm.used)
+    free = bytes_to_gb(vm.available)  # available = free + reclaimable cache
+    percent = vm.percent
+
+    print(
+        f"Total: {total:6.2f} GB | "
+        f"Used: {used:6.2f} GB | "
+        f"Free: {free:6.2f} GB | "
+        f"Usage: {percent:5.1f}%"
+    )
+
 
 # -----------------------------
 # 基础工具：ADAIN 所需的统计量（保留以备需要；管线默认用 wavelet）
@@ -39,6 +61,37 @@ def _adain(content_feat: torch.Tensor, style_feat: torch.Tensor) -> torch.Tensor
     normalized = (content_feat - content_mean.expand(size)) / content_std.expand(size)
     return normalized * style_std.expand(size) + style_mean.expand(size)
 
+def save_frame_chunk(cur_frames, save_path, fps=30, quality=6):
+    """
+    Save one FlashVSR output chunk directly to an MP4.
+
+    cur_frames shape:
+        [1, 3, T, H, W]
+    value range:
+        approximately [-1, 1]
+    """
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+
+    frames = cur_frames[0]  # [3, T, H, W]
+
+    # Convert only THIS chunk, not the entire video.
+    frames = (
+        (frames.float() + 1.0) * 127.5
+    ).clamp(0, 255).to(torch.uint8)
+
+    frames = frames.permute(1, 2, 3, 0).cpu().numpy()  # [T,H,W,C]
+
+    writer = imageio.get_writer(
+        save_path,
+        fps=fps,
+        quality=quality,
+    )
+
+    try:
+        for frame in frames:
+            writer.append_data(frame)
+    finally:
+        writer.close()
 
 # -----------------------------
 # 小波式模糊与分解/重构（ColorCorrector 用）
@@ -306,6 +359,9 @@ class FlashVSRTinyLongPipeline(BasePipeline):
         kv_ratio=3.0,
         local_range = 9,
         color_fix = True,
+        output_dir=None,
+        output_fps=30,
+        output_quality=6,
     ):
         # 只接受 cfg=1.0（与原代码一致）
         assert cfg_scale == 1.0, "cfg_scale must be 1.0"
@@ -425,12 +481,35 @@ class FlashVSRTinyLongPipeline(BasePipeline):
                 except:
                     pass
 
-                frames_total.append(cur_frames.to('cpu'))
+                chunk_path = os.path.join(
+                    "/scratch/rohhs/projects",
+                    f"chunk_{cur_process_idx:04d}.mp4"
+                )
+
+                print(f"Saving chunk {cur_process_idx}: {chunk_path}")
+
+                save_frame_chunk(
+                    cur_frames,
+                    chunk_path,
+                    fps=output_fps,
+                    quality=output_quality,
+                )
+
+                # Immediately release this chunk.
+                del cur_frames
+
+                print_ram()
+
+                
+                # frames_total.append(cur_frames.to('cpu'))
+
                 LQ_pre_idx = LQ_cur_idx
 
-            frames = torch.cat(frames_total, dim=2)
+            # frames = torch.cat(frames_total, dim=2)
 
-        return frames[0]
+        # return frames[0]
+
+        return None
 
 
 # -----------------------------
