@@ -8,9 +8,14 @@ import imageio
 from tqdm import tqdm
 import torch
 from einops import rearrange
+import argparse
 
 from diffsynth import ModelManager, FlashVSRFullPipeline
 from utils.utils import Causal_LQ4x_Proj
+
+ap = argparse.ArgumentParser()
+ap.add_argument("--model_path", default=os.path.join(os.getenv("HF_HUB", "."), "FlashVSR-v1.1"))
+args = ap.parse_args()
 
 def tensor2video(frames: torch.Tensor):
     frames = rearrange(frames, "C T H W -> T H W C")
@@ -161,12 +166,12 @@ def init_pipeline():
     print(torch.cuda.current_device(), torch.cuda.get_device_name(torch.cuda.current_device()))
     mm = ModelManager(torch_dtype=torch.bfloat16, device="cpu")
     mm.load_models([
-        "./FlashVSR-v1.1/diffusion_pytorch_model_streaming_dmd.safetensors",
-        "./FlashVSR-v1.1/Wan2.1_VAE.pth",
+        f"{args.model_path}/diffusion_pytorch_model_streaming_dmd.safetensors",
+        f"{args.model_path}/Wan2.1_VAE.pth",
     ])
     pipe = FlashVSRFullPipeline.from_model_manager(mm, device="cuda")
     pipe.denoising_model().LQ_proj_in = Causal_LQ4x_Proj(in_dim=3, out_dim=1536, layer_num=1).to("cuda", dtype=torch.bfloat16)
-    LQ_proj_in_path = "./FlashVSR-v1.1/LQ_proj_in.ckpt"
+    LQ_proj_in_path = f"{args.model_path}/LQ_proj_in.ckpt"
     if os.path.exists(LQ_proj_in_path):
         pipe.denoising_model().LQ_proj_in.load_state_dict(torch.load(LQ_proj_in_path, map_location="cpu"), strict=True)
 
