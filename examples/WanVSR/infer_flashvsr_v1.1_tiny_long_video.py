@@ -23,6 +23,7 @@ SCRATCH = os.getenv("SCRATCH", ".")
 ap = argparse.ArgumentParser()
 ap.add_argument("--model_path", default=os.path.join(HF_HUB, "FlashVSR-v1.1"))
 ap.add_argument("--results_dir", default=os.path.join(SCRATCH, "results"))
+ap.add_argument("--scale", default=4.0, type=float)
 ap.add_argument("--inputs", nargs="+", default=["./inputs/example0.mp4", "./inputs/example1.mp4", "./inputs/example2.mp4", "./inputs/example3.mp4"])
 ap.add_argument("--tiled", action='store_true')
 args = ap.parse_args()
@@ -259,9 +260,10 @@ def init_pipeline():
 
 def main():
     os.makedirs(args.results_dir, exist_ok=True)
-    seed, scale, dtype, device = 0, 4.0, torch.bfloat16, 'cuda'
+    seed, scale, dtype, device = 0, args.scale, torch.bfloat16, 'cuda'
     sparse_ratio = 2.0      # Recommended: 1.5 or 2.0. 1.5 → faster; 2.0 → more stable.
     pipe = init_pipeline()
+    chunks_dir = os.path.join(args.results_dir, "chunks")
 
     for p in args.inputs:
         torch.cuda.empty_cache(); torch.cuda.ipc_collect()
@@ -280,14 +282,14 @@ def main():
             kv_ratio=3.0,
             local_range=11,  # Recommended: 9 or 11. local_range=9 → sharper details; 11 → more stable results.
             color_fix = True,
-            output_dir=os.path.join(args.results_dir, "chunks"),
+            output_dir=chunks_dir,
         )
 
         del LQ
         import gc
         gc.collect()
 
-        save_path = os.path.join(args.results_dir, f"FlashVSR_v1.1_Tiny_Long_{name.split('.')[0]}_seed{seed}.mp4" )
+        save_path = os.path.join(args.results_dir, f"{name.split('.')[0]}_scale{args.scale}_seed{seed}.mp4" )
 
         print("FlashVSR inference finished.")
         print("Starting RAM-safe concatenation...")
@@ -298,13 +300,12 @@ def main():
             save_video_tensor(video, save_path, fps=fps, quality=5)
         else:
             concat_mp4_chunks(
-                chunk_dir=os.path.join(args.results_dir, "chunks"),
+                chunk_dir=chunks_dir,
                 final_path=save_path,
             )
 
         del video
         gc.collect()
-
 
     print("Done.")
 
