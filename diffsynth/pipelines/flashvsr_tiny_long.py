@@ -482,7 +482,7 @@ class FlashVSRTinyLongPipeline(BasePipeline):
                     pass
 
                 chunk_path = os.path.join(
-                    "/scratch/rohhs/projects",
+                    output_dir,
                     f"chunk_{cur_process_idx:04d}.mp4"
                 )
 

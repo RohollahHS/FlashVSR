@@ -33,12 +33,10 @@ def concat_mp4_chunks(chunk_dir, final_path):
         raise FileNotFoundError(f"No MP4 chunks found in: {chunk_dir}")
     concat_file = os.path.join(chunk_dir, "concat.txt")
     with open(concat_file, "w") as f:
-        for chunk in chunks:
-            f.write(f"file '{os.path.abspath(chunk)}'\n")
+        for chunk in chunks: f.write(f"file '{os.path.abspath(chunk)}'\n")
     subprocess.run( [ "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", concat_file, "-c", "copy", final_path, ], check=True, )
     os.remove(concat_file)
-    for cunk in chunks:
-        os.remove(cunk)
+    for cunk in chunks: os.remove(cunk)
     print(f"Done: {final_path}")
     print(f"Deleted {len(chunks)} temporary chunks.")
 
@@ -293,7 +291,6 @@ def main():
 
         print("FlashVSR inference finished.")
         print("Starting RAM-safe concatenation...")
-
 
         # video = tensor2video(video)
         # save_video(video, save_path, fps=fps, quality=5)
