@@ -77,6 +77,13 @@ def upscale_then_center_crop(img: Image.Image, scale: int, tW: int, tH: int) -> 
     return up.crop((l, t, l + tW, t + tH))
 
 def prepare_input_tensor(path: str, scale: int = 4, dtype=torch.bfloat16, device='cuda'):
+    if isinstance(scale, float):
+        if not scale.is_integer():
+            raise ValueError(f"scale must be an integer, got {scale}")
+        scale = int(scale)
+    else:
+        scale = int(scale)
+
     if os.path.isdir(path):
         paths0 = list_images_natural(path)
         if not paths0:
@@ -87,10 +94,6 @@ def prepare_input_tensor(path: str, scale: int = 4, dtype=torch.bfloat16, device
         print(f"[{os.path.basename(path)}] Original Resolution: {w0}x{h0} | Original Frames: {N0}")
 
         sW, sH, tW, tH = compute_scaled_and_target_dims(w0, h0, scale=scale, multiple=128)
-
-        sW, sH = int(round(sW)), int(round(sH))
-        tW, tH = int(round(tW)), int(round(tH))
-
         print(f"[{os.path.basename(path)}] Scaled Resolution (x{scale}): {sW}x{sH} -> Target (128-multiple): {tW}x{tH}")
 
         paths = paths0 + [paths0[-1]] * 4
@@ -147,10 +150,6 @@ def prepare_input_tensor(path: str, scale: int = 4, dtype=torch.bfloat16, device
         print(f"[{os.path.basename(path)}] Original Resolution: {w0}x{h0} | Original Frames: {total} | FPS: {fps}")
 
         sW, sH, tW, tH = compute_scaled_and_target_dims(w0, h0, scale=scale, multiple=128)
-
-        sW, sH = int(round(sW)), int(round(sH))
-        tW, tH = int(round(tW)), int(round(tH))
-
         print(f"[{os.path.basename(path)}] Scaled Resolution (x{scale}): {sW}x{sH} -> Target (128-multiple): {tW}x{tH}")
 
         idx = list(range(total)) + [total - 1] * 4
