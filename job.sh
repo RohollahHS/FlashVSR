@@ -30,4 +30,6 @@ cd $PROJECTS_DIR/FlashVSR/examples/WanVSR/
 input="/scratch/rohhs/downloads/yt-dlp/biker.mp4"
 results_dir=/scratch/rohhs/downloads/yt-dlp
 
-python infer_flashvsr_v1.1_tiny_long_video.py --inputs $input --results_dir $results_dir --scale 1.0 2>&1 | tee -a "$SLURM_OUTPUTS/${SLURM_JOB_ID}_super_resolution.log"
+python infer_flashvsr_v1.1_full.py --inputs $input --results_dir $results_dir --scale 2.0 2>&1 | tee "$SLURM_OUTPUTS/super_resolution.log"
+
+python infer_flashvsr_v1.1_tiny_long_video.py --inputs $input --results_dir $results_dir --scale 1.0 2>&1 | tee "$SLURM_OUTPUTS/super_resolution.log"

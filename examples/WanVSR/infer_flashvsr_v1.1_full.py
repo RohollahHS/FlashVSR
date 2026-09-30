@@ -87,6 +87,10 @@ def prepare_input_tensor(path: str, scale: int = 4, dtype=torch.bfloat16, device
         print(f"[{os.path.basename(path)}] Original Resolution: {w0}x{h0} | Original Frames: {N0}")
 
         sW, sH, tW, tH = compute_scaled_and_target_dims(w0, h0, scale=scale, multiple=128)
+
+        sW, sH = int(round(sW)), int(round(sH))
+        tW, tH = int(round(tW)), int(round(tH))
+
         print(f"[{os.path.basename(path)}] Scaled Resolution (x{scale}): {sW}x{sH} -> Target (128-multiple): {tW}x{tH}")
 
         paths = paths0 + [paths0[-1]] * 4
