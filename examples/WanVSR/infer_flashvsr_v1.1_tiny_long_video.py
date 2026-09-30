@@ -275,6 +275,7 @@ def main():
         except Exception as e:
             print(f"[Error] {name}: {e}"); continue
 
+        quality = 5
         video = pipe(
             prompt="", negative_prompt="", cfg_scale=1.0, num_inference_steps=1, seed=seed,
             LQ_video=LQ, num_frames=F, height=th, width=tw, is_full_block=False, if_buffer=True,
@@ -283,6 +284,7 @@ def main():
             local_range=11,  # Recommended: 9 or 11. local_range=9 → sharper details; 11 → more stable results.
             color_fix = True,
             output_dir=chunks_dir,
+            output_quality=quality
         )
 
         del LQ
@@ -297,7 +299,7 @@ def main():
         # video = tensor2video(video)
         # save_video(video, save_path, fps=fps, quality=5)
         if video is not None:
-            save_video_tensor(video, save_path, fps=fps, quality=5)
+            save_video_tensor(video, save_path, fps=fps, quality=quality)
         else:
             concat_mp4_chunks(
                 chunk_dir=chunks_dir,

@@ -20,6 +20,7 @@ SCRATCH = os.getenv("SCRATCH", ".")
 ap = argparse.ArgumentParser()
 ap.add_argument("--model_path", default=os.path.join(HF_HUB, "FlashVSR-v1.1"))
 ap.add_argument("--results_dir", default=os.path.join(SCRATCH, "results"))
+ap.add_argument("--scale", default=4.0, type=float)
 ap.add_argument("--inputs", nargs="+", default=["./inputs/example0.mp4", "./inputs/example1.mp4", "./inputs/example2.mp4", "./inputs/example3.mp4"])
 ap.add_argument("--tiled", action='store_true')
 args = ap.parse_args()
@@ -191,7 +192,7 @@ def init_pipeline():
 
 def main():
     os.makedirs(args.results_dir, exist_ok=True)
-    seed, scale, dtype, device = 0, 4, torch.bfloat16, 'cuda'
+    seed, scale, dtype, device = 0, args.scale, torch.bfloat16, 'cuda'
     sparse_ratio = 2.0      # Recommended: 1.5 or 2.0. 1.5 → faster; 2.0 → more stable.
     pipe = init_pipeline()
 
@@ -217,7 +218,7 @@ def main():
             color_fix = True,
         )
         video = tensor2video(video)
-        save_video(video, os.path.join(args.results_dir, f"FlashVSR_v1.1_Full_{name.split('.')[0]}_seed{seed}.mp4"), fps=fps, quality=6)
+        save_video(video, os.path.join(args.results_dir, f"{name.split('.')[0]}_full_scale{args.scale}_seed{seed}.mp4"), fps=fps, quality=6)
     print("Done.")
 
 if __name__ == "__main__":

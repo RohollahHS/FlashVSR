@@ -326,6 +326,9 @@ class FlashVSRFullPipeline(BasePipeline):
         kv_ratio=3.0,
         local_range = 9,
         color_fix = True,
+        output_dir=None,
+        output_fps=30,
+        output_quality=6,
     ):
         # 只接受 cfg=1.0（与原代码一致）
         assert cfg_scale == 1.0, "cfg_scale must be 1.0"
