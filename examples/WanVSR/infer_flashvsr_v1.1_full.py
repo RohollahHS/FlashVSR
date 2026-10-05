@@ -8,6 +8,7 @@ import imageio
 from tqdm import tqdm
 import torch
 from einops import rearrange
+import glob
 
 from diffsynth import ModelManager, FlashVSRFullPipeline
 from utils.utils import Causal_LQ4x_Proj
@@ -202,6 +203,13 @@ def main():
     seed, scale, dtype, device = 0, args.scale, torch.bfloat16, 'cuda'
     sparse_ratio = 2.0      # Recommended: 1.5 or 2.0. 1.5 → faster; 2.0 → more stable.
     pipe = init_pipeline()
+    
+    inputs = []
+    for _input in args.inputs:
+        if os.path.isdir(_input):
+            inputs.extend(glob.glob(os.path.join(_input, "*")))
+        elif os.path.isfile(_input):
+            inputs.append(_input)
 
     for p in args.inputs:
         torch.cuda.empty_cache(); torch.cuda.ipc_collect()

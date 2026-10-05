@@ -145,93 +145,277 @@ def upscale_then_center_crop(img: Image.Image, scale: float, tW: int, tH: int) -
     return up.crop((l, t, l + tW, t + tH))
 
 
-def prepare_input_tensor(path: str, scale: float = 4, dtype=torch.bfloat16, device='cuda'):
+def is_video(path: str) -> bool:
+    """Return True if path is an existing supported video file."""
+    video_exts = {
+        ".mp4",
+        ".avi",
+        ".mov",
+        ".mkv",
+        ".webm",
+        ".mpeg",
+        ".mpg",
+        ".m4v",
+    }
+
+    return (
+        os.path.isfile(path)
+        and os.path.splitext(path)[1].lower() in video_exts
+    )
+
+
+def prepare_input_tensor(
+    path: str,
+    scale: float = 4,
+    dtype=torch.bfloat16,
+    device="cuda",
+):
+    # Fix inputs like:
+    # "input_path=/scratch/.../video.mp4"
+    if not isinstance(path, str):
+        raise TypeError(f"path must be a string, got {type(path)}")
+
+    path = path.strip()
+
+    if path.startswith("input_path="):
+        path = path[len("input_path="):].strip()
+
+    path = os.path.expanduser(path)
+    path = os.path.abspath(path)
+
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Input does not exist: {path}")
+
+    # =========================================================
+    # IMAGE DIRECTORY
+    # =========================================================
     if os.path.isdir(path):
         paths0 = list_images_natural(path)
+
         if not paths0:
             raise FileNotFoundError(f"No images in {path}")
 
         with Image.open(paths0[0]) as _img0:
             w0, h0 = _img0.size
-        N0 = len(paths0)
-        print(f"[{os.path.basename(path)}] Original Resolution: {w0}x{h0} | Original Frames: {N0}")
 
-        sW, sH, tW, tH = compute_scaled_and_target_dims(w0, h0, scale=scale, multiple=128)
-        print(f"[{os.path.basename(path)}] Scaled (x{scale:.2f}): {sW}x{sH} -> Target (128-multiple): {tW}x{tH}")
+        N0 = len(paths0)
+
+        print(
+            f"[{os.path.basename(path)}] "
+            f"Original Resolution: {w0}x{h0} | "
+            f"Original Frames: {N0}"
+        )
+
+        sW, sH, tW, tH = compute_scaled_and_target_dims(
+            w0,
+            h0,
+            scale=scale,
+            multiple=128,
+        )
+
+        print(
+            f"[{os.path.basename(path)}] "
+            f"Scaled (x{scale:.2f}): {sW}x{sH} "
+            f"-> Target (128-multiple): {tW}x{tH}"
+        )
 
         paths = paths0 + [paths0[-1]] * 4
+
         F = largest_8n1_leq(len(paths))
+
         if F == 0:
-            raise RuntimeError(f"Not enough frames after padding in {path}. Got {len(paths)}.")
+            raise RuntimeError(
+                f"Not enough frames after padding in {path}. "
+                f"Got {len(paths)}."
+            )
+
         paths = paths[:F]
-        print(f"[{os.path.basename(path)}] Target Frames (8n-3): {F-4}")
+
+        print(
+            f"[{os.path.basename(path)}] "
+            f"Target Frames (8n-3): {F - 4}"
+        )
 
         frames = []
-        count_img = 0
-        for p in paths:
-            with Image.open(p).convert('RGB') as img:
-                img_out = upscale_then_center_crop(img, scale=scale, tW=tW, tH=tH)
-            frames.append(pil_to_tensor_neg1_1(img_out, dtype, 'cpu'))
-            print(count_img, len(paths), end = '\r')
-            count_img+=1
-        vid = torch.stack(frames, 0).permute(1,0,2,3).unsqueeze(0)  # 1 C F H W
+
+        for count_img, p in enumerate(paths):
+            with Image.open(p) as img:
+                img = img.convert("RGB")
+                img_out = upscale_then_center_crop(
+                    img,
+                    scale=scale,
+                    tW=tW,
+                    tH=tH,
+                )
+
+            frames.append(
+                pil_to_tensor_neg1_1(
+                    img_out,
+                    dtype,
+                    "cpu",
+                )
+            )
+
+            print(
+                count_img + 1,
+                len(paths),
+                end="\r",
+            )
+
+        print()
+
+        # 1 C F H W
+        vid = (
+            torch.stack(frames, dim=0)
+            .permute(1, 0, 2, 3)
+            .unsqueeze(0)
+        )
+
         fps = 30
+
         return vid, tH, tW, F, fps
 
+    # =========================================================
+    # VIDEO FILE
+    # =========================================================
     if is_video(path):
         rdr = imageio.get_reader(path)
-        first = Image.fromarray(rdr.get_data(0)).convert('RGB')
-        w0, h0 = first.size
 
-        meta = {}
-        try: meta = rdr.get_meta_data()
-        except Exception: pass
-        fps_val = meta.get('fps', 30)
-        fps = int(round(fps_val)) if isinstance(fps_val, (int, float)) else 30
-
-        def count_frames(r):
-            try:
-                nf = meta.get('nframes', None)
-                if isinstance(nf,int) and nf>0: return nf
-            except Exception: pass
-            try: return r.count_frames()
-            except Exception:
-                n=0
-                try:
-                    while True: r.get_data(n); n+=1
-                except Exception:
-                    return n
-
-        total = count_frames(rdr)
-        if total <= 0:
-            rdr.close()
-            raise RuntimeError(f"Cannot read frames from {path}")
-
-        print(f"[{os.path.basename(path)}] Original Resolution: {w0}x{h0} | Original Frames: {total} | FPS: {fps}")
-
-        sW, sH, tW, tH = compute_scaled_and_target_dims(w0, h0, scale=scale, multiple=128)
-        print(f"[{os.path.basename(path)}] Scaled (x{scale:.2f}): {sW}x{sH} -> Target (128-multiple): {tW}x{tH}")
-
-        idx = list(range(total)) + [total-1]*4
-        F = largest_8n1_leq(len(idx))
-        if F == 0:
-            rdr.close()
-            raise RuntimeError(f"Not enough frames after padding in {path}. Got {len(idx)}.")
-        idx = idx[:F]
-        print(f"[{os.path.basename(path)}] Target Frames (8n-3): {F-4}")
-
-        frames = []
         try:
-            for i in idx:
-                img = Image.fromarray(rdr.get_data(i)).convert('RGB')
-                img_out = upscale_then_center_crop(img, scale=scale, tW=tW, tH=tH)
-                frames.append(pil_to_tensor_neg1_1(img_out, dtype, 'cpu'))
-                print(i, len(idx), end = '\r')
-        finally:
-            try: rdr.close()
-            except Exception: pass
+            first = Image.fromarray(
+                rdr.get_data(0)
+            ).convert("RGB")
 
-        vid = torch.stack(frames, 0).permute(1,0,2,3).unsqueeze(0)  # 1 C F H W
+            w0, h0 = first.size
+
+            meta = {}
+            try:
+                meta = rdr.get_meta_data()
+            except Exception:
+                pass
+
+            fps_val = meta.get("fps", 30)
+
+            if isinstance(fps_val, (int, float)) and fps_val > 0:
+                fps = int(round(fps_val))
+            else:
+                fps = 30
+
+            def count_frames(r):
+                # Try metadata first
+                try:
+                    nf = meta.get("nframes", None)
+                    if isinstance(nf, int) and nf > 0:
+                        return nf
+                except Exception:
+                    pass
+
+                # Then imageio
+                try:
+                    nf = r.count_frames()
+                    if isinstance(nf, int) and nf > 0:
+                        return nf
+                except Exception:
+                    pass
+
+                # Last resort: count manually
+                n = 0
+                try:
+                    while True:
+                        r.get_data(n)
+                        n += 1
+                except Exception:
+                    pass
+
+                return n
+
+            total = count_frames(rdr)
+
+            if total <= 0:
+                raise RuntimeError(
+                    f"Cannot read frames from {path}"
+                )
+
+            print(
+                f"[{os.path.basename(path)}] "
+                f"Original Resolution: {w0}x{h0} | "
+                f"Original Frames: {total} | "
+                f"FPS: {fps}"
+            )
+
+            sW, sH, tW, tH = compute_scaled_and_target_dims(
+                w0,
+                h0,
+                scale=scale,
+                multiple=128,
+            )
+
+            print(
+                f"[{os.path.basename(path)}] "
+                f"Scaled (x{scale:.2f}): {sW}x{sH} "
+                f"-> Target (128-multiple): {tW}x{tH}"
+            )
+
+            # Add 4 copies of the last frame
+            idx = list(range(total)) + [total - 1] * 4
+
+            F = largest_8n1_leq(len(idx))
+
+            if F == 0:
+                raise RuntimeError(
+                    f"Not enough frames after padding in {path}. "
+                    f"Got {len(idx)}."
+                )
+
+            idx = idx[:F]
+
+            print(
+                f"[{os.path.basename(path)}] "
+                f"Target Frames (8n-3): {F - 4}"
+            )
+
+            frames = []
+
+            for count_img, i in enumerate(idx):
+                frame = rdr.get_data(i)
+
+                img = Image.fromarray(frame).convert("RGB")
+
+                img_out = upscale_then_center_crop(
+                    img,
+                    scale=scale,
+                    tW=tW,
+                    tH=tH,
+                )
+
+                frames.append(
+                    pil_to_tensor_neg1_1(
+                        img_out,
+                        dtype,
+                        "cpu",
+                    )
+                )
+
+                print(
+                    f"{count_img + 1}/{len(idx)}",
+                    end="\r",
+                )
+
+            print()
+
+        finally:
+            try:
+                rdr.close()
+            except Exception:
+                pass
+
+        # 1 C F H W
+        vid = (
+            torch.stack(frames, dim=0)
+            .permute(1, 0, 2, 3)
+            .unsqueeze(0)
+        )
+
         return vid, tH, tW, F, fps
 
     raise ValueError(f"Unsupported input: {path}")
