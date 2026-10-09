@@ -24,7 +24,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--model_path", default=os.path.join(HF_HUB, "FlashVSR-v1.1"))
 ap.add_argument("--results_dir", default=os.path.join(SCRATCH, "results"))
 ap.add_argument("--scale", default=4.0, type=float)
-ap.add_argument("--inputs", nargs="+", default=["./inputs/example0.mp4", "./inputs/example1.mp4", "./inputs/example2.mp4", "./inputs/example3.mp4"])
+ap.add_argument("--inputs", nargs="+", default=["./inputs/example0.mp4", "./inputs/example1.mp4"])
 ap.add_argument("--tiled", action='store_true')
 args = ap.parse_args()
 

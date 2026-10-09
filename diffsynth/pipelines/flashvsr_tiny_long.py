@@ -486,7 +486,8 @@ class FlashVSRTinyLongPipeline(BasePipeline):
                     f"chunk_{cur_process_idx:04d}.mp4"
                 )
 
-                print(f"Saving chunk {cur_process_idx}: {chunk_path}")
+                if cur_process_idx % 50 == 0:
+                    print(f"Saving chunk {cur_process_idx}: {chunk_path}")
 
                 save_frame_chunk(
                     cur_frames,
